@@ -2,8 +2,8 @@ name: Build and Deploy to Cloud Run
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'release-*'
 
 jobs:
   setup-build-publish-deploy:
