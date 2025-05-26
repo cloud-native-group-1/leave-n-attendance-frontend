@@ -1,341 +1,451 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar, CheckCircle, Clock, FileText, Paperclip, User, UserCheck, XCircle } from "lucide-react"
-import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { format } from "date-fns"
+import { ArrowLeft, Calendar, Clock, Download, FileText, Paperclip, User, Users } from "lucide-react"
 import { toast } from "sonner"
 
-// Mock data based on API spec
-const leaveRequestData = {
-  id: 1,
-  request_id: "REQ-001",
-  user: {
-    id: 1,
-    first_name: "John",
-    last_name: "Doe",
-    employee_id: "EMP001"
-  },
-  leave_type: {
-    id: 1,
-    name: "Annual Leave",
-    color_code: "#4f46e5"
-  },
-  start_date: "2023-10-15",
-  end_date: "2023-10-18",
-  days_count: 4,
-  reason: "Family vacation to visit relatives in Taipei. We plan to have a family reunion and celebrate my parents' anniversary.",
-  status: "Approved",
-  proxy_person: {
-    id: 3,
-    first_name: "Alice",
-    last_name: "Johnson"
-  },
-  approver: {
-    id: 2,
-    first_name: "Jane",
-    last_name: "Smith"
-  },
-  approved_at: "2023-10-10T14:30:00Z",
-  created_at: "2023-10-05T09:15:00Z",
-  attachments: [
-    {
-      id: 1,
-      file_name: "vacation_docs.pdf",
-      file_type: "application/pdf",
-      file_size: 1024000,
-      uploaded_at: "2023-10-05T09:20:00Z"
-    }
-  ]
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { 
+  getLeaveRequestDetail, 
+  getLeaveAttachments, 
+  approveLeaveRequest, 
+  rejectLeaveRequest,
+  type LeaveRequestDetail, 
+  type LeaveAttachmentResult 
+} from "@/lib/services/leave-request"
+import { getCurrentUser, type UserProfile } from "@/lib/services/user"
+import { getSubordinates, type TeamMember } from "@/lib/services/team"
+
+interface LeaveRequestDetailPageProps {
+  params: Promise<{ id: string }>
 }
 
-export default function LeaveRequestDetailsPage({ params }: { params: { id: string } }) {
-  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
+export default function LeaveRequestDetailPage({ params }: LeaveRequestDetailPageProps) {
+  const router = useRouter()
+  const [leaveRequest, setLeaveRequest] = useState<LeaveRequestDetail | null>(null)
+  const [attachments, setAttachments] = useState<LeaveAttachmentResult[]>([])
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
+  const [subordinates, setSubordinates] = useState<TeamMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isApproving, setIsApproving] = useState(false)
+  const [isRejecting, setIsRejecting] = useState(false)
   const [rejectionReason, setRejectionReason] = useState("")
-  const [isStatusUpdating, setIsStatusUpdating] = useState(false)
-  
-  // Mock approval/rejection functionality
-  const handleApprove = () => {
-    setIsStatusUpdating(true)
-    // Simulate API call
-    setTimeout(() => {
-      toast("Leave request approved", {
-        description: `Leave request ${leaveRequestData.request_id} has been approved successfully.`
-      })
-      setIsStatusUpdating(false)
-    }, 1500)
+  const [showRejectForm, setShowRejectForm] = useState(false)
+
+  // Check if current user can approve this request
+  const canApprove = currentUser && leaveRequest && 
+    subordinates.some(sub => sub.id === leaveRequest.user.id) &&
+    leaveRequest.status === "pending"
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const resolvedParams = await params
+        const requestId = parseInt(resolvedParams.id)
+
+        if (isNaN(requestId)) {
+          toast.error("無效的請假申請 ID")
+          router.push("/dashboard/leave-requests")
+          return
+        }
+
+        // Fetch all data in parallel
+        const [requestDetail, requestAttachments, user] = await Promise.all([
+          getLeaveRequestDetail(requestId),
+          getLeaveAttachments(requestId),
+          getCurrentUser(),
+        ])
+
+        setLeaveRequest(requestDetail)
+        setAttachments(requestAttachments)
+        setCurrentUser(user)
+
+        // Fetch subordinates if user is a manager
+        if (user.is_manager) {
+          const subs = await getSubordinates()
+          setSubordinates(subs)
+        }
+
+      } catch (error) {
+        console.error("Failed to fetch leave request details:", error)
+        toast.error("載入請假申請詳情失敗")
+        router.push("/dashboard/leave-requests")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [params, router])
+
+  const handleApprove = async () => {
+    if (!leaveRequest) return
+
+    try {
+      setIsApproving(true)
+      const response = await approveLeaveRequest(leaveRequest.id)
+      
+      // Update local state with the response data
+      setLeaveRequest(prev => prev ? { 
+        ...prev, 
+        status: "approved",
+        approver: response.approver,
+        approved_at: response.approved_at
+      } : null)
+      
+      toast.success("請假申請已核准")
+    } catch (error) {
+      console.error("Failed to approve leave request:", error)
+      toast.error("核准請假申請失敗")
+    } finally {
+      setIsApproving(false)
+    }
   }
-  
-  const handleReject = () => {
-    if (!rejectionReason.trim()) {
-      toast("Rejection reason required", {
-        description: "Please provide a reason for rejecting this request."
-      })
+
+  const handleReject = async () => {
+    if (!leaveRequest || !rejectionReason.trim()) {
+      toast.error("請輸入拒絕理由")
       return
     }
-    
-    setIsStatusUpdating(true)
-    // Simulate API call
-    setTimeout(() => {
-      toast("Leave request rejected", {
-        description: `Leave request ${leaveRequestData.request_id} has been rejected.`
-      })
-      setIsRejectDialogOpen(false)
-      setIsStatusUpdating(false)
-    }, 1500)
+
+    try {
+      setIsRejecting(true)
+      const response = await rejectLeaveRequest(leaveRequest.id, rejectionReason)
+      
+      // Update local state with the response data
+      setLeaveRequest(prev => prev ? { 
+        ...prev, 
+        status: "rejected",
+        rejection_reason: rejectionReason,
+        approver: response.approver,
+        approved_at: response.approved_at
+      } : null)
+      
+      toast.success("請假申請已拒絕")
+      setShowRejectForm(false)
+      setRejectionReason("")
+    } catch (error) {
+      console.error("Failed to reject leave request:", error)
+      toast.error("拒絕請假申請失敗")
+    } finally {
+      setIsRejecting(false)
+    }
   }
-  
-  // Format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' bytes'
-    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
-    else return (bytes / 1048576).toFixed(1) + ' MB'
+
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "approved":
+        return <Badge variant="default">已核准</Badge>
+      case "rejected":
+        return <Badge variant="destructive">已拒絕</Badge>
+      case "pending":
+        return <Badge variant="outline">審核中</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
   }
-  
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leave Request Details</h1>
-          <p className="text-muted-foreground">
-            Review and manage leave request {leaveRequestData.request_id}
-          </p>
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const handleDownload = (attachment: LeaveAttachmentResult) => {
+    // For now, we'll use the file_path from the API response
+    // In a real implementation, you might need a dedicated download endpoint
+    try {
+      const link = document.createElement('a')
+      link.href = attachment.file_path
+      link.download = attachment.file_name
+      link.target = '_blank'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Failed to download file:', error)
+      toast.error('下載檔案失敗')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">載入中...</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/leave-requests">
-              Back to Requests
-            </Link>
+      </div>
+    )
+  }
+
+  if (!leaveRequest) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-muted-foreground">找不到請假申請</p>
+          <Button 
+            variant="outline" 
+            onClick={() => router.push("/dashboard/leave-requests")}
+            className="mt-4"
+          >
+            返回列表
           </Button>
         </div>
       </div>
+    )
+  }
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <CardTitle>{leaveRequestData.leave_type.name} Request</CardTitle>
-                <CardDescription>
-                  Submitted on {new Date(leaveRequestData.created_at).toLocaleDateString()}
-                </CardDescription>
-              </div>
-              <Badge 
-                className={
-                  leaveRequestData.status === "Approved" 
-                    ? "bg-green-500" 
-                    : leaveRequestData.status === "Rejected" 
-                      ? "bg-red-500" 
-                      : ""
-                }
-              >
-                {leaveRequestData.status}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-start gap-2">
-                  <Calendar className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Date Range</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(leaveRequestData.start_date).toLocaleDateString()} to {new Date(leaveRequestData.end_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Clock className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Duration</p>
-                    <p className="text-sm text-muted-foreground">{leaveRequestData.days_count} days</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <User className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Requested By</p>
-                    <p className="text-sm text-muted-foreground">
-                      {leaveRequestData.user.first_name} {leaveRequestData.user.last_name} ({leaveRequestData.user.employee_id})
-                    </p>
-                  </div>
-                </div>
-              </div>
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 py-4">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          返回
+        </Button>
+  
+      </div>
 
-              <div className="space-y-4">
-                <div className="flex items-start gap-2">
-                  <UserCheck className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Proxy Person</p>
-                    <p className="text-sm text-muted-foreground">
-                      {leaveRequestData.proxy_person.first_name} {leaveRequestData.proxy_person.last_name}
-                    </p>
-                  </div>
-                </div>
-                {leaveRequestData.approver && (
-                  <div className="flex items-start gap-2">
-                    <UserCheck className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Approved/Rejected By</p>
-                      <p className="text-sm text-muted-foreground">
-                        {leaveRequestData.approver.first_name} {leaveRequestData.approver.last_name}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {leaveRequestData.approved_at && (
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Response Date</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(leaveRequestData.approved_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                )}
+      <div className="space-y-6">
+        {/* Main Content */}
+        <div className="space-y-6">
+          {/* Basic Information */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  請假申請詳情
+                  
+                </CardTitle>
+                <Badge variant="outline" className="text-sm">申請編號：{leaveRequest.request_id}</Badge>
               </div>
-            </div>
-
-            <div>
-              <h3 className="font-medium mb-2">Reason</h3>
-              <div className="p-3 bg-muted rounded-md text-sm">
-                {leaveRequestData.reason}
-              </div>
-            </div>
-
-            {leaveRequestData.attachments && leaveRequestData.attachments.length > 0 && (
-              <div>
-                <h3 className="font-medium mb-2">Attachments</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  {leaveRequestData.attachments.map((attachment) => (
-                    <div key={attachment.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
-                      <div className="flex items-center gap-2">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">{attachment.file_name}</span>
-                        <span className="text-xs text-muted-foreground">({formatFileSize(attachment.file_size)})</span>
+                  <Label className="text-sm font-medium text-muted-foreground">申請人</Label>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{leaveRequest.user.last_name}{leaveRequest.user.first_name}</span>
+                    {leaveRequest.user.employee_id && (
+                      <span className="text-sm text-muted-foreground">({leaveRequest.user.employee_id})</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">假別</Label>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span>{leaveRequest.leave_type.name}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">請假期間</Label>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {format(new Date(leaveRequest.start_date), "yyyy/MM/dd")} - {format(new Date(leaveRequest.end_date), "yyyy/MM/dd")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">請假天數</Label>
+                  <span className="font-medium">{leaveRequest.days_count} 天</span>
+                </div>
+
+                {leaveRequest.proxy_person && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">代理人</Label>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span>{leaveRequest.proxy_person.last_name}{leaveRequest.proxy_person.first_name}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground">申請時間</Label>
+                  <span>{format(new Date(leaveRequest.created_at), "yyyy/MM/dd HH:mm")}</span>
+                </div>
+              </div>
+
+              {leaveRequest.reason && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">請假事由</Label>
+                    <p className="text-sm bg-muted p-3 rounded-md">{leaveRequest.reason}</p>
+                  </div>
+                </>
+              )}
+
+              {/* Approval Status Footer */}
+              {leaveRequest.status !== "pending" && (
+                <>
+                  <Separator />
+                  <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium text-muted-foreground">審核狀態</Label>
+                      {getStatusBadge(leaveRequest.status)}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {leaveRequest.approver && (
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-muted-foreground">審核人</Label>
+                          <p className="text-sm">{leaveRequest.approver.last_name}{leaveRequest.approver.first_name}</p>
+                        </div>
+                      )}
+
+                      {leaveRequest.approved_at && (
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-muted-foreground">審核時間</Label>
+                          <p className="text-sm">{format(new Date(leaveRequest.approved_at), "yyyy/MM/dd HH:mm")}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {leaveRequest.rejection_reason && leaveRequest.status.toLowerCase() === "rejected" && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-muted-foreground">拒絕理由</Label>
+                        <p className="text-sm bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20">
+                          {leaveRequest.rejection_reason}
+                        </p>
                       </div>
-                      <Button variant="ghost" size="sm">Download</Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Attachments */}
+          {attachments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Paperclip className="h-5 w-5" />
+                  附件 ({attachments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{attachment.file_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(attachment.file_size)} • 
+                            上傳於 {format(new Date(attachment.uploaded_at), "yyyy/MM/dd HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload(attachment)}
+                        className="flex-shrink-0"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </CardContent>
-          {leaveRequestData.status === "Pending" && (
-            <CardFooter className="flex justify-end gap-2 border-t pt-6">
-              <Button 
-                variant="outline" 
-                onClick={() => setIsRejectDialogOpen(true)}
-                disabled={isStatusUpdating}
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Reject
-              </Button>
-              <Button 
-                onClick={handleApprove}
-                disabled={isStatusUpdating}
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Approve
-              </Button>
-            </CardFooter>
+              </CardContent>
+            </Card>
           )}
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Request Timeline</CardTitle>
-            <CardDescription>History of this leave request</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6 relative before:absolute before:inset-0 before:left-3.5 before:w-px before:h-full before:bg-muted">
-              <div className="relative pl-8">
-                <div className="absolute left-0 top-1 h-6 w-6 rounded-full bg-primary flex items-center justify-center">
-                  <FileText className="h-3 w-3 text-primary-foreground" />
-                </div>
-                <h3 className="font-medium">Request Created</h3>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(leaveRequestData.created_at).toLocaleString()}
-                </p>
-              </div>
-              
-              {leaveRequestData.attachments && leaveRequestData.attachments.length > 0 && (
-                <div className="relative pl-8">
-                  <div className="absolute left-0 top-1 h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Paperclip className="h-3 w-3 text-primary" />
+          {/* Approval Actions */}
+          {canApprove && (
+            <Card>
+              <CardHeader>
+                <CardTitle>審核操作</CardTitle>
+                <CardDescription>
+                  您可以核准或拒絕此請假申請
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!showRejectForm ? (
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={handleApprove}
+                      disabled={isApproving}
+                      className="flex-1"
+                    >
+                      {isApproving ? "核准中..." : "核准申請"}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setShowRejectForm(true)}
+                      className="flex-1"
+                    >
+                      拒絕申請
+                    </Button>
                   </div>
-                  <h3 className="font-medium">Attachments Added</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(leaveRequestData.attachments[0].uploaded_at).toLocaleString()}
-                  </p>
-                </div>
-              )}
-              
-              {leaveRequestData.status !== "Pending" && (
-                <div className="relative pl-8">
-                  <div className={`absolute left-0 top-1 h-6 w-6 rounded-full ${
-                    leaveRequestData.status === "Approved" ? "bg-green-500" : "bg-red-500"
-                  } flex items-center justify-center`}>
-                    {leaveRequestData.status === "Approved" ? (
-                      <CheckCircle className="h-3 w-3 text-white" />
-                    ) : (
-                      <XCircle className="h-3 w-3 text-white" />
-                    )}
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="rejection-reason">拒絕理由</Label>
+                      <Textarea
+                        id="rejection-reason"
+                        placeholder="請輸入拒絕理由..."
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex gap-4">
+                      <Button
+                        variant="destructive"
+                        onClick={handleReject}
+                        disabled={isRejecting || !rejectionReason.trim()}
+                        className="flex-1"
+                      >
+                        {isRejecting ? "拒絕中..." : "確認拒絕"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowRejectForm(false)
+                          setRejectionReason("")
+                        }}
+                        className="flex-1"
+                      >
+                        取消
+                      </Button>
+                    </div>
                   </div>
-                  <h3 className="font-medium">Request {leaveRequestData.status}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(leaveRequestData.approved_at).toLocaleString()}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    By {leaveRequestData.approver.first_name} {leaveRequestData.approver.last_name}
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
-      
-      {/* Rejection Dialog */}
-      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Leave Request</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejecting this leave request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <Textarea 
-              placeholder="Rejection reason" 
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsRejectDialogOpen(false)}
-              disabled={isStatusUpdating}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleReject}
-              disabled={isStatusUpdating}
-            >
-              Reject Request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
-} 
+}

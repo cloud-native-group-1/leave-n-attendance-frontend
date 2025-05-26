@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Bell, CheckCheck, MailOpen } from "lucide-react"
+import { Bell, CheckCheck, MailOpen, FileText, Hourglass, CheckCircle2, XCircle, UserCheck } from "lucide-react"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import {
@@ -13,6 +13,7 @@ import {
   markAllNotificationsAsRead
 } from "@/lib/services/notification-service"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
 
 // Skeleton component for a single notification
 function NotificationSkeleton() {
@@ -44,6 +45,7 @@ function NotificationsListSkeleton() {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [activeTab, setActiveTab] = useState("all")
   const [loading, setLoading] = useState(true)
@@ -59,6 +61,12 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchNotifications()
   }, [activeTab])
+  
+  // Add useEffect to fetch notifications when pagination.page changes
+  useEffect(() => {
+    fetchNotifications()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pagination.page])
   
   const fetchNotifications = async () => {
     setLoading(true)
@@ -105,12 +113,12 @@ export default function NotificationsPage() {
         )
       )
       
-      toast("Notification marked as read", {
-        description: "The notification has been marked as read successfully."
+      toast("通知已標記為已讀", {
+        description: "該通知已成功標記為已讀"
       })
     } catch (err) {
       console.error('Error marking notification as read:', err)
-      toast.error('Failed to mark notification as read')
+      toast.error('無法標記通知為已讀')
     }
   }
   
@@ -124,13 +132,41 @@ export default function NotificationsPage() {
         prev.map(notification => ({ ...notification, is_read: true }))
       )
       
-      toast("All notifications marked as read", {
-        description: `${notifications.filter(n => !n.is_read).length} notifications marked as read successfully.`
+      toast("所有通知已標記為已讀", {
+        description: `${notifications.filter(n => !n.is_read).length} 則通知已標記為已讀`
       })
     } catch (err) {
       console.error('Error marking all notifications as read:', err)
-      toast.error('Failed to mark all notifications as read')
+      toast.error('無法將所有通知標記為已讀')
     }
+  }
+  
+  // Navigate to detail page
+  const navigateToDetailPage = (notification: Notification) => {
+    // Determine appropriate path based on related_to value
+    let path = '/dashboard';
+    
+    switch (notification.related_to) {
+      case 'leave_request':
+        path = `/dashboard/leave-requests/${notification.related_id}`;
+        break;
+      case 'team_calendar':
+        path = '/dashboard/calendar';
+        break;
+      case 'leave_balance':
+        path = '/dashboard/profile';
+        break;
+      default:
+        path = '/dashboard';
+    }
+    
+    // Mark as read before navigation
+    if (!notification.is_read) {
+      handleMarkAsRead(notification.id);
+    }
+    
+    // Navigate to the detail page
+    router.push(path);
   }
   
   // Format date to relative time (e.g., "2 hours ago")
@@ -151,6 +187,24 @@ export default function NotificationsPage() {
       return `${diffMin} 分鐘前`
     } else {
       return "剛剛"
+    }
+  }
+  
+  // Icon for each notification type
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "leave_request":
+        return <FileText className="h-5 w-5 text-blue-500" />
+      case "pending":
+        return <Hourglass className="h-5 w-5 text-amber-500" />
+      case "approval":
+        return <CheckCircle2 className="h-5 w-5 text-green-500" />
+      case "rejection":
+        return <XCircle className="h-5 w-5 text-red-500" />
+      case "proxy":
+        return <UserCheck className="h-5 w-5 text-purple-500" />
+      default:
+        return <FileText className="h-5 w-5" />
     }
   }
   
@@ -222,7 +276,10 @@ export default function NotificationsPage() {
                   }`}
                 >
                   <div className="flex justify-between items-start gap-4 mb-2">
-                    <h3 className="font-medium leading-tight">{notification.title}</h3>
+                    <div className="flex items-center gap-2">
+                      {getNotificationIcon(notification.related_to)}
+                      <h3 className="font-medium leading-tight">{notification.title}</h3>
+                    </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatRelativeTime(notification.created_at)}
                     </span>
@@ -234,29 +291,7 @@ export default function NotificationsPage() {
                     <Button 
                       variant="link" 
                       className="p-0 h-auto text-sm"
-                      onClick={() => {
-                        // Navigate to the related item
-                        let path = '/dashboard';
-                        
-                        // Determine appropriate path based on related_to value
-                        switch (notification.related_to) {
-                          case 'leave_request':
-                            path = `/dashboard/leave-requests/${notification.related_id}`;
-                            break;
-                          case 'team_calendar':
-                            path = '/dashboard/calendar';
-                            break;
-                          case 'leave_balance':
-                            path = '/dashboard/profile';
-                            break;
-                          default:
-                            path = '/dashboard';
-                        }
-                        
-                        toast("正在前往相關頁面", {
-                          description: `前往 ${path}`,
-                        })
-                      }}
+                      onClick={() => navigateToDetailPage(notification)}
                     >
                       查看詳情
                     </Button>
@@ -264,7 +299,10 @@ export default function NotificationsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleMarkAsRead(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsRead(notification.id);
+                        }}
                         className="hover:bg-background/80"
                       >
                         <MailOpen className="h-4 w-4 mr-2" />
@@ -281,7 +319,35 @@ export default function NotificationsPage() {
           <div className="text-sm text-muted-foreground">
             顯示 {filteredNotifications.length} 則通知，共 {pagination.total} 則
           </div>
-          {/* Add pagination controls here if needed */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (pagination.page > 1) {
+                  setPagination((prev) => ({ ...prev, page: prev.page - 1 }))
+                }
+              }}
+              disabled={pagination.page <= 1 || loading}
+            >
+              上一頁
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              第 {pagination.page} / {pagination.total_pages} 頁
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (pagination.page < pagination.total_pages) {
+                  setPagination((prev) => ({ ...prev, page: prev.page + 1 }))
+                }
+              }}
+              disabled={pagination.page >= pagination.total_pages || loading}
+            >
+              下一頁
+            </Button>
+          </div>
         </CardFooter>
       </Card>
     </div>

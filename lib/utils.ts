@@ -25,5 +25,5 @@ export function formatDate(dateString: string): string {
  */
 export function formatName(person: { first_name?: string; last_name?: string } | null | undefined) {
   if (!person) return '-';
-  return `${person.first_name || ''} ${person.last_name || ''}`.trim() || '-';
+  return `${person.last_name || ''}${person.first_name || ''}`.trim() || '-';
 }

@@ -72,6 +72,19 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
   }
 }
 
+// 獲取下屬成員
+export async function getSubordinates(): Promise<TeamMember[]> {
+  try {
+    const response = await api.get("/users/subordinates");
+    
+    const data: TeamListResponse = response.data;
+    return data.team_members;
+  } catch (error) {
+    console.error("Error fetching subordinates:", error);
+    return [];
+  }
+}
+
 // 獲取團隊休假申請，如果提供日期則過濾特定日期的申請
 export async function getTeamLeaveRequests(date?: string): Promise<LeaveRequestTeamItem[]> {
   try {

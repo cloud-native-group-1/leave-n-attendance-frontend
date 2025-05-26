@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Check, Eye, Filter, MoreHorizontal, X, CalendarIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 import api from "@/lib/api"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -56,6 +57,8 @@ interface LeaveRequestsTableProps {
 
 
 export function LeaveRequestsTable({ type }: LeaveRequestsTableProps) {
+  const router = useRouter()
+  
   // State management
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
@@ -241,8 +244,7 @@ export function LeaveRequestsTable({ type }: LeaveRequestsTableProps) {
 
   // Request action handlers
   const handleView = (request: LeaveRequest) => {
-    setSelectedRequest(request);
-    setIsViewDialogOpen(true);
+    router.push(`/dashboard/leave-requests/${request.id}`)
   }
 
   const handleApprove = (request: LeaveRequest) => {

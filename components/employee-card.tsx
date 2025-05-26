@@ -15,63 +15,69 @@ export interface TeamMember {
   position: string
   email: string
   department?: string
-  status: "Available" | "On Leave"
+  status: "在職中" | "請假中"
   leaveType?: string
   leaveUntil?: string
   isCurrentUser?: boolean
+  isManager?: boolean
 }
 
-interface TeamMemberCardProps {
+interface EmployeeCardProps {
   member: TeamMember
 }
 
-export function TeamMemberCard({ member }: TeamMemberCardProps) {
+export function EmployeeCard({ member }: EmployeeCardProps) {
   const router = useRouter()
   
   return (
-    <Card className="flex flex-col overflow-hidden justify-between">
-      <CardContent className="p-0">
-        <div className={`h-2 ${member.status === "Available" ? "bg-green-500" : "bg-amber-500"}`} />
-        <div className="flex flex-col items-center text-center p-6">
-          <Avatar className="h-24 w-24 mb-4">
+    <Card className="max-w-[20rem] flex flex-col overflow-hidden justify-between h-[360px]">
+      <CardContent className="p-0 flex-1">
+        <div className={`h-2 ${member.status === "在職中" ? "bg-green-500" : "bg-amber-500"}`} />
+        <div className="flex flex-col items-center text-center p-6 h-full">
+          <Avatar className="h-20 w-20 mb-4">
             <AvatarImage src={`/placeholder.svg?height=100&width=100&text=${member.first_name[0]}${member.last_name[0]}`} alt={`${member.first_name} ${member.last_name}`} />
             <AvatarFallback>
-              {member.first_name[0]}{member.last_name[0]}
+                {member.first_name}
             </AvatarFallback>
           </Avatar>
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-lg">{member.first_name} {member.last_name}</h3>
+            <h3 className="font-semibold text-lg">{member.last_name}{member.first_name}</h3>
             {member.isCurrentUser && (
-              <Badge variant="secondary">You</Badge>
+              <Badge variant="secondary">本人</Badge>
+            )}
+            {member.isManager && (
+              <Badge variant="outline" className="bg-blue-100 border-blue-200">主管</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mb-2">{member.position}</p>
+        <div className="flex flex-col items-center justify-center gap-2 text-sm mb-2">
+            {
+                member.department && (
+                <Badge variant="outline" className="rounded-sm">
+                    {member.department}
+                </Badge>
+                )
+            }
+            <p className="text-sm text-muted-foreground">{member.position}</p>
+        </div>
           <Tooltip>
             <TooltipTrigger>
-              <Badge variant={member.status === "Available" ? "default" : "outline"} className="mb-4">
+              <Badge variant={member.status === "在職中" ? "default" : "outline"} className="mb-4">
                 {member.status}
               </Badge>
             </TooltipTrigger>
-            {member.status === "On Leave" && (
+            {member.status === "請假中" && (
               <TooltipContent>
                 <p>{member.leaveType}</p>
-                <p>Until {member.leaveUntil && formatDate(member.leaveUntil)}</p>
+                <p>直到 {member.leaveUntil && formatDate(member.leaveUntil)}</p>
               </TooltipContent>
             )}
           </Tooltip>
 
-          <div className="flex flex-col gap-2 w-full">
+          <div className="flex flex-col gap-2 w-full mt-auto">
             <div className="flex items-center gap-2 text-sm">
               <Mail className="h-4 w-4 text-muted-foreground" />
               <span className="truncate">{member.email}</span>
             </div>
-            {member.department && (
-              <div className="flex items-center gap-2 text-sm">
-                <Badge variant="outline" className="rounded-sm">
-                  {member.department}
-                </Badge>
-              </div>
-            )}
           </div>
         </div>
       </CardContent>
@@ -82,9 +88,9 @@ export function TeamMemberCard({ member }: TeamMemberCardProps) {
           size="sm"
           onClick={() => router.push(`/dashboard/profile/${member.id}`)}
         >
-          View Profile
+          查看個人資料
         </Button>
       </CardFooter>
     </Card>
   )
-}
+} 

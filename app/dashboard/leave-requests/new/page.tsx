@@ -22,8 +22,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils"
 import { getTeamMembers, type TeamMember } from "@/lib/services/team"
 import { type LeaveType, getLeaveTypes } from "@/lib/services/leave-type"
-import { createLeaveRequest } from "@/lib/services/leave-request"
+import { createLeaveRequest, uploadLeaveAttachment } from "@/lib/services/leave-request"
 import { getMyLeaveBalance, type LeaveBalanceItem } from "@/lib/services/leave-balance"
+import { getCurrentUser, type UserProfile } from "@/lib/services/user"
 
 const formSchema = z.object({
   leaveType: z.string({
@@ -51,6 +52,8 @@ export default function NewLeaveRequestPage() {
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceItem[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false)
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -76,14 +79,16 @@ export default function NewLeaveRequestPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [types, members, balance] = await Promise.all([
+        const [types, members, balance, user] = await Promise.all([
           getLeaveTypes(),
           getTeamMembers(),
           getMyLeaveBalance(),
+          getCurrentUser(),
         ])
         setLeaveTypes(types)
         setTeamMembers(members)
         setLeaveBalances(balance.balances)
+        setCurrentUser(user)
       } catch (error) {
         console.error('Failed to fetch data:', error)
         toast.error("載入資料失敗", {
@@ -105,11 +110,33 @@ export default function NewLeaveRequestPage() {
         proxy_user_id: parseInt(values.proxyPerson),
       }
 
-      await createLeaveRequest(data)
+      const leaveRequest = await createLeaveRequest(data)
 
-      toast.success("請假申請已送出", {
-        description: "您的請假申請已成功送出。",
-      })
+      // Upload attachments if any files are selected
+      if (files.length > 0) {
+        try {
+          setIsUploadingFiles(true)
+          const uploadPromises = files.map(file => 
+            uploadLeaveAttachment(leaveRequest.id, file)
+          )
+          await Promise.all(uploadPromises)
+          
+          toast.success("請假申請已送出", {
+            description: `您的請假申請已成功送出，並上傳了 ${files.length} 個附件。`,
+          })
+        } catch (uploadError) {
+          console.error('Failed to upload some attachments:', uploadError)
+          toast.success("請假申請已送出", {
+            description: "請假申請已成功送出，但部分附件上傳失敗。",
+          })
+        } finally {
+          setIsUploadingFiles(false)
+        }
+      } else {
+        toast.success("請假申請已送出", {
+          description: "您的請假申請已成功送出。",
+        })
+      }
 
       router.push("/dashboard/leave-requests")
     } catch (error) {
@@ -125,12 +152,58 @@ export default function NewLeaveRequestPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files)
-      setFiles((prev) => [...prev, ...newFiles])
+      
+      // File validation
+      const maxFileSize = 10 * 1024 * 1024 // 10MB
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain'
+      ]
+      
+      const validFiles: File[] = []
+      const invalidFiles: string[] = []
+      
+      newFiles.forEach(file => {
+        if (file.size > maxFileSize) {
+          invalidFiles.push(`${file.name} (檔案過大，超過 10MB)`)
+        } else if (!allowedTypes.includes(file.type)) {
+          invalidFiles.push(`${file.name} (不支援的檔案格式)`)
+        } else {
+          validFiles.push(file)
+        }
+      })
+      
+      if (invalidFiles.length > 0) {
+        toast.error("部分檔案無法上傳", {
+          description: invalidFiles.join(', ')
+        })
+      }
+      
+      if (validFiles.length > 0) {
+        setFiles((prev) => [...prev, ...validFiles])
+      }
+      
+      // Reset input value to allow selecting the same file again
+      e.target.value = ''
     }
   }
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   // 處理送出按鈕點擊
@@ -279,11 +352,17 @@ export default function NewLeaveRequestPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {teamMembers.map((person) => (
-                          <SelectItem key={person.id} value={person.id.toString()}>
-                            {person.first_name} {person.last_name}
+                        {!currentUser ? (
+                          <SelectItem value="loading" disabled>
+                            載入中...
                           </SelectItem>
-                        ))}
+                        ) : teamMembers
+                          .filter(person => person.id !== currentUser.id)
+                          .map((person) => (
+                            <SelectItem key={person.id} value={person.id.toString()}>
+                              {person.first_name} {person.last_name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormDescription>
@@ -303,26 +382,48 @@ export default function NewLeaveRequestPage() {
                     <FormControl>
                       <div className="space-y-4">
                         <div className="flex items-center gap-2">
-                          <Input type="file" id="file-upload" className="hidden" onChange={handleFileChange} multiple />
+                          <Input 
+                            type="file" 
+                            id="file-upload" 
+                            className="hidden" 
+                            onChange={handleFileChange} 
+                            multiple 
+                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                          />
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => document.getElementById("file-upload")?.click()}
+                            disabled={isSubmitting}
                           >
                             <Paperclip className="mr-2 h-4 w-4" />
                             上傳附件
                           </Button>
+                          <span className="text-xs text-muted-foreground">
+                            支援圖片、PDF、Word、Excel、文字檔案，單檔最大 10MB
+                          </span>
                         </div>
 
                         {files.length > 0 && (
                           <div className="space-y-2">
                             {files.map((file, index) => (
-                              <div key={`file-${index}`} className="flex items-center justify-between rounded-md border p-2">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Paperclip className="h-4 w-4" />
-                                  <span>{file.name}</span>
+                              <div key={`file-${index}`} className="flex items-center justify-between rounded-md border p-3 bg-muted/50">
+                                <div className="flex items-center gap-3 text-sm min-w-0 flex-1">
+                                  <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-medium truncate">{file.name}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {formatFileSize(file.size)} • {file.type.split('/')[1]?.toUpperCase() || 'Unknown'}
+                                    </div>
+                                  </div>
                                 </div>
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeFile(index)}>
+                                <Button 
+                                  type="button" 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => removeFile(index)}
+                                  className="ml-2 flex-shrink-0"
+                                >
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -354,7 +455,11 @@ export default function NewLeaveRequestPage() {
                   className={!isFormValid ? "opacity-50" : ""}
                   onClick={handleSubmitClick}
                 >
-                  {isSubmitting ? "送出中..." : "送出申請"}
+                  {isSubmitting ? (
+                    isUploadingFiles ? "上傳附件中..." : "送出中..."
+                  ) : (
+                    "送出申請"
+                  )}
                 </Button>
               </div>
             </form>

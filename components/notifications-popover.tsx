@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Bell, CheckCheck, Clock, FileText, User } from "lucide-react"
+import { Bell, CheckCheck, Clock, FileText, User, Hourglass, CheckCircle2, XCircle, UserCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -60,14 +60,43 @@ export function NotificationsPopover() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "leave_request":
-        return <Clock className="h-5 w-5 text-blue-500" />
-      case "team_calendar":
-        return <User className="h-5 w-5 text-green-500" />
-      case "leave_balance":
-        return <FileText className="h-5 w-5 text-amber-500" />
+        return <FileText className="h-5 w-5 text-blue-500" />
+      case "pending":
+        return <Hourglass className="h-5 w-5 text-amber-500" />
+      case "approval":
+        return <CheckCircle2 className="h-5 w-5 text-green-500" />
+      case "rejection":
+        return <XCircle className="h-5 w-5 text-red-500" />
+      case "proxy":
+        return <UserCheck className="h-5 w-5 text-purple-500" />
       default:
         return <Clock className="h-5 w-5" />
     }
+  }
+  
+  const navigateToDetailPage = (notification: Notification) => {
+    // Close popover first
+    setIsOpen(false)
+    
+    // Determine navigation path based on notification type
+    let path = '/dashboard';
+    
+    switch (notification.related_to) {
+      case 'leave_request':
+        path = `/dashboard/leave-requests/${notification.related_id}`;
+        break;
+      case 'team_calendar':
+        path = '/dashboard/calendar';
+        break;
+      case 'leave_balance':
+        path = '/dashboard/profile';
+        break;
+      default:
+        path = '/dashboard';
+    }
+    
+    // Navigate to the detail page
+    router.push(path);
   }
 
   const unreadCount = notifications.filter((n) => !n.is_read).length
@@ -133,7 +162,8 @@ export function NotificationsPopover() {
                     key={notification.id}
                     className={`flex items-start gap-4 p-4 ${
                       !notification.is_read ? "bg-muted/50" : ""
-                    }`}
+                    } cursor-pointer hover:bg-muted/60`}
+                    onClick={() => navigateToDetailPage(notification)}
                     data-testid={`notification-${notification.id}`}
                   >
                     <div className="mt-1">{getNotificationIcon(notification.related_to)}</div>

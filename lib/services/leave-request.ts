@@ -55,6 +55,61 @@ export interface CreateLeaveRequest {
   proxy_user_id: number
 }
 
+// Attachment related interfaces
+export interface LeaveAttachmentOut {
+  id: number
+  leave_request_id: number
+  file_name: string
+  file_type: string
+  file_size: number
+  uploaded_at: string
+}
+
+export interface LeaveAttachmentResult {
+  id: number
+  leave_request_id: number
+  file_name: string
+  file_type: string
+  file_size: number
+  file_path: string
+  uploaded_at: string
+}
+
+export interface LeaveAttachmentListResult {
+  attachments: LeaveAttachmentResult[]
+  total_count: number
+}
+
+// Leave request detail interface
+export interface UserBase {
+  id: number
+  first_name: string
+  last_name: string
+  employee_id?: string | null
+}
+
+export interface LeaveTypeBase {
+  id: number
+  name: string
+}
+
+export interface LeaveRequestDetail {
+  id: number
+  request_id: string
+  user: UserBase
+  leave_type: LeaveTypeBase
+  start_date: string
+  end_date: string
+  days_count: number
+  reason: string
+  status: string
+  proxy_person: UserBase | null
+  approver: UserBase | null
+  approved_at: string | null
+  created_at: string
+  rejection_reason?: string | null
+}
+
 export function isOnLeave(userId: number, leaveRequests: LeaveRequestTeamItem[]): { 
   isOnLeave: boolean; 
   leaveType?: string; 
@@ -135,22 +190,25 @@ export async function getPendingLeaveRequests(filters: TeamLeaveRequestFilters =
   }
 }
 
-export async function approveLeaveRequest(leaveRequestId: number): Promise<void> {
+export async function approveLeaveRequest(id: number): Promise<LeaveRequestApprovalResponse> {
   try {
-    await api.patch(`/leave-requests/${leaveRequestId}/approve`, {})
+    const response = await api.patch<LeaveRequestApprovalResponse>(`/leave-requests/${id}/approve`)
+    return response.data
   } catch (error) {
-    console.error("Failed to approve leave request:", error)
+    console.error(`Failed to approve leave request with ID ${id}:`, error)
     throw error
   }
 }
 
-export async function rejectLeaveRequest(leaveRequestId: number, rejectionReason: string): Promise<void> {
+export async function rejectLeaveRequest(id: number, rejectionReason: string): Promise<LeaveRequestRejectionResponse> {
   try {
-    await api.patch(`/leave-requests/${leaveRequestId}/reject`, { 
-      rejection_reason: rejectionReason 
-    })
+    const response = await api.patch<LeaveRequestRejectionResponse>(
+      `/leave-requests/${id}/reject`,
+      { rejection_reason: rejectionReason }
+    )
+    return response.data
   } catch (error) {
-    console.error("Failed to reject leave request:", error)
+    console.error(`Failed to reject leave request with ID ${id}:`, error)
     throw error
   }
 }
@@ -169,4 +227,74 @@ export async function createLeaveRequest(data: CreateLeaveRequest) {
     console.error("Failed to create leave request:", error)
     throw error
   }
+}
+
+export async function getLeaveRequestById(id: number): Promise<LeaveRequestListItem> {
+  try {
+    const response = await api.get<LeaveRequestListItem>(`/leave-requests/${id}`)
+    return response.data
+  } catch (error) {
+    console.error(`Failed to fetch leave request with ID ${id}:`, error)
+    throw error
+  }
+}
+
+// Attachment functions
+export async function uploadLeaveAttachment(leaveRequestId: number, file: File): Promise<LeaveAttachmentOut> {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await api.post<LeaveAttachmentOut>(
+      `/leave-requests/${leaveRequestId}/attachments`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
+    return response.data
+  } catch (error) {
+    console.error(`Failed to upload attachment for leave request ${leaveRequestId}:`, error)
+    throw error
+  }
+}
+
+export async function getLeaveAttachments(leaveRequestId: number): Promise<LeaveAttachmentResult[]> {
+  try {
+    const response = await api.get<LeaveAttachmentListResult>(`/leave-requests/${leaveRequestId}/attachments`)
+    return response.data.attachments || []
+  } catch (error) {
+    console.error(`Failed to fetch attachments for leave request ${leaveRequestId}:`, error)
+    throw error
+  }
+}
+
+export async function getLeaveRequestDetail(id: number): Promise<LeaveRequestDetail> {
+  try {
+    const response = await api.get<LeaveRequestDetail>(`/leave-requests/${id}`)
+    return response.data
+  } catch (error) {
+    console.error(`Failed to fetch leave request detail with ID ${id}:`, error)
+    throw error
+  }
+}
+
+// Approval related interfaces
+export interface LeaveRequestApprovalResponse {
+  id: number
+  request_id: string
+  status: string
+  approver: ProxyUserOut
+  approved_at: string
+}
+
+export interface LeaveRequestRejectionResponse {
+  id: number
+  request_id: string
+  status: string
+  approver: ProxyUserOut
+  approved_at: string
+  rejection_reason: string
 } 

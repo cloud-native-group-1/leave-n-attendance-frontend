@@ -9,6 +9,9 @@ export interface ManagerOut {
   id: number
   first_name: string
   last_name: string
+  email: string
+  department: DepartmentOut
+  position: string
 }
 
 export interface UserProfile {

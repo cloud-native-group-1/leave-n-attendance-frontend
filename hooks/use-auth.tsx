@@ -4,12 +4,31 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import api from '@/lib/api'
 
-interface User {
+interface Department {
+  id: number
+  name: string
+}
+
+interface Manager {
   id: number
   first_name: string
   last_name: string
   email: string
-  // 其他欄位可依需求擴充
+  department: Department
+  position: string
+}
+
+interface User {
+  id: number
+  employee_id: string
+  first_name: string
+  last_name: string
+  email: string
+  department: Department
+  position: string
+  is_manager: boolean
+  manager?: Manager | null
+  hire_date: string
 }
 
 export function useAuth() {
