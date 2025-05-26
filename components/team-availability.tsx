@@ -120,7 +120,7 @@ export function TeamAvailability() {
           <div className="space-y-2">
             {onLeaveMembers.map((request) => (
               <div key={request.id} className="text-sm">
-                {request.user.first_name} {request.user.last_name} - {request.leave_type.name}
+                {request.user.last_name}{request.user.first_name} - {request.leave_type.name}
               </div>
             ))}
           </div>

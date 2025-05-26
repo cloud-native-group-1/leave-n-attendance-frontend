@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { TeamMember, EmployeeCard } from "@/components/employee-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -8,13 +9,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
-import { Tree, TreeNode } from "react-organizational-chart"
 import { Mail } from "lucide-react"
 import { getTeamMembers, getSubordinates } from "@/lib/services/team"
 import { getTeamLeaveRequests, LeaveRequestTeamItem, isOnLeave } from "@/lib/services/leave-request"
 import { cn, formatDate } from "@/lib/utils"
 import { getCurrentUser, UserProfile, ManagerOut } from "@/lib/services/user"
 import { useRouter } from "next/navigation"
+
+// 動態導入組織架構圖組件，避免 SSR 問題
+const Tree = dynamic(() => import("react-organizational-chart").then(mod => ({ default: mod.Tree })), {
+  ssr: false,
+  loading: () => <div className="flex justify-center items-center h-32">載入組織架構圖...</div>
+})
+
+const TreeNode = dynamic(() => import("react-organizational-chart").then(mod => ({ default: mod.TreeNode })), {
+  ssr: false
+})
 
 export default function TeamPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
