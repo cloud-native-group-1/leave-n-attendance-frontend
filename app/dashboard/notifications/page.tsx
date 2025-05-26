@@ -143,30 +143,12 @@ export default function NotificationsPage() {
   
   // Navigate to detail page
   const navigateToDetailPage = (notification: Notification) => {
-    // Determine appropriate path based on related_to value
-    let path = '/dashboard';
-    
-    switch (notification.related_to) {
-      case 'leave_request':
-        path = `/dashboard/leave-requests/${notification.related_id}`;
-        break;
-      case 'team_calendar':
-        path = '/dashboard/calendar';
-        break;
-      case 'leave_balance':
-        path = '/dashboard/profile';
-        break;
-      default:
-        path = '/dashboard';
-    }
-    
     // Mark as read before navigation
     if (!notification.is_read) {
       handleMarkAsRead(notification.id);
     }
-    
     // Navigate to the detail page
-    router.push(path);
+    router.push(`/dashboard/leave-requests/${notification.related_id}`);
   }
   
   // Format date to relative time (e.g., "2 hours ago")

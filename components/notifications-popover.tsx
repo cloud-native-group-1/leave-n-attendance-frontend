@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { 
   type Notification,
   getNotifications,
-  markAllNotificationsAsRead
+  markAllNotificationsAsRead,
+  markNotificationAsRead
 } from "@/lib/services/notification-service"
 
 export function NotificationsPopover() {
@@ -37,6 +38,29 @@ export function NotificationsPopover() {
 
     fetchNotifications()
   }, [])
+
+  // Mark a single notification as read
+  const handleMarkAsRead = async (id: number) => {
+    try {
+      await markNotificationAsRead(id)
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id 
+            ? { ...notification, is_read: true } 
+            : notification
+        )
+      )
+      
+      toast("通知已標記為已讀", {
+        description: "該通知已成功標記為已讀"
+      })
+    } catch (err) {
+      console.error('Error marking notification as read:', err)
+      toast.error('無法標記通知為已讀')
+    }
+  }
 
   const handleMarkAllAsRead = async () => {
     try {
@@ -78,25 +102,12 @@ export function NotificationsPopover() {
     // Close popover first
     setIsOpen(false)
     
-    // Determine navigation path based on notification type
-    let path = '/dashboard';
-    
-    switch (notification.related_to) {
-      case 'leave_request':
-        path = `/dashboard/leave-requests/${notification.related_id}`;
-        break;
-      case 'team_calendar':
-        path = '/dashboard/calendar';
-        break;
-      case 'leave_balance':
-        path = '/dashboard/profile';
-        break;
-      default:
-        path = '/dashboard';
+    // Mark as read before navigation
+    if (!notification.is_read) {
+      handleMarkAsRead(notification.id);
     }
-    
     // Navigate to the detail page
-    router.push(path);
+    router.push(`/dashboard/leave-requests/${notification.related_id}`);
   }
 
   const unreadCount = notifications.filter((n) => !n.is_read).length

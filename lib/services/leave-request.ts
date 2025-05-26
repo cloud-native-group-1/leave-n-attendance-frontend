@@ -119,9 +119,15 @@ export function isOnLeave(userId: number, leaveRequests: LeaveRequestTeamItem[])
   const currentLeave = leaveRequests.find(request => {
     if (request.user.id !== userId || request.status !== 'approved') return false
     const startDate = new Date(request.start_date)
+    startDate.setHours(0, 0, 0, 0)
     const endDate = new Date(request.end_date)
+    endDate.setHours(23, 59, 59, 999)
     return today >= startDate && today <= endDate
   })
+  console.log('currentLeave', currentLeave)
+  console.log('leaveRequests', leaveRequests)
+  console.log('today', today)
+
 
   return currentLeave 
     ? { 

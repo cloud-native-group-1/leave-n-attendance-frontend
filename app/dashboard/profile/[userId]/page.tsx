@@ -135,7 +135,7 @@ export default function ProfilePage() {
   }
 
   if (loading || !userData) {
-    return <div className="p-4 text-center">Loading profile...</div>
+    return <div className="p-4 text-center">載入個人資料中...</div>
   }
 
   // Get leave quotas by type
@@ -160,34 +160,25 @@ export default function ProfilePage() {
           <Card className="w-[25rem] lg:w-[30rem] max-w-full mx-4">
           <CardHeader>
             <CardTitle>
-              {isOwnProfile ? "Personal Information" : `${userData.first_name}'s Profile`}
+              {isOwnProfile ? "個人資料" : `${userData.last_name}${userData.first_name}的個人資料`}
             </CardTitle>
             <CardDescription>
               {isOwnProfile 
-                ? "Your employee details and account information" 
-                : "Employee details and account information"}
+                ? "您的員工詳細資料和帳戶資訊" 
+                : "員工詳細資料和帳戶資訊"}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-4 mb-6">
               <Avatar className="h-24 w-24">
-                <AvatarImage src={`https://ui-avatars.com/api/?name=${userData.first_name}+${userData.last_name}&background=random`} />
-                <AvatarFallback>{userData.first_name[0]}{userData.last_name[0]}</AvatarFallback>
+                <AvatarImage src={`https://ui-avatars.com/api/?name=${userData.last_name}+${userData.first_name}&background=random`} />
+                <AvatarFallback>{userData.last_name[0]}{userData.first_name[0]}</AvatarFallback>
               </Avatar>
               <div className="text-center">
                 {isEditing && isOwnProfile ? (
                   <div className="flex items-center gap-2 mb-2">
                     <div className="grid w-full items-center gap-1.5">
-                      <Label htmlFor="first_name">First Name</Label>
-                      <Input 
-                        id="first_name"
-                        name="first_name"
-                        value={formData.first_name}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="grid w-full items-center gap-1.5">
-                      <Label htmlFor="last_name">Last Name</Label>
+                      <Label htmlFor="last_name">姓氏</Label>
                       <Input 
                         id="last_name"
                         name="last_name"
@@ -195,9 +186,18 @@ export default function ProfilePage() {
                         onChange={handleInputChange}
                       />
                     </div>
+                    <div className="grid w-full items-center gap-1.5">
+                      <Label htmlFor="first_name">名字</Label>
+                      <Input 
+                        id="first_name"
+                        name="first_name"
+                        value={formData.first_name}
+                        onChange={handleInputChange}
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <h3 className="text-lg font-semibold">{userData.first_name} {userData.last_name}</h3>
+                  <h3 className="text-lg font-semibold">{userData.last_name}{userData.first_name}</h3>
                 )}
                 <p className="text-muted-foreground">{userData.position}</p>
               </div>
@@ -205,12 +205,12 @@ export default function ProfilePage() {
 
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Employee ID</div>
+                <div className="font-medium">員工編號</div>
                 <div className="col-span-2">{userData.employee_id}</div>
               </div>
                
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Email</div>
+                <div className="font-medium">電子郵件</div>
                 {isEditing && isOwnProfile ? (
                   <div className="col-span-2">
                     <Input 
@@ -226,29 +226,29 @@ export default function ProfilePage() {
               </div>
                
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Department</div>
+                <div className="font-medium">部門</div>
                 <div className="col-span-2">{userData.department.name}</div>
               </div>
                
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Manager</div>
+                <div className="font-medium">主管</div>
                 <div className="col-span-2">
                   {userData.manager
-                    ? `${userData.manager.first_name} ${userData.manager.last_name}`
+                    ? `${userData.manager.last_name}${userData.manager.first_name}`
                     : "—"}
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Hire Date</div>
-                <div className="col-span-2">{new Date(userData.hire_date).toLocaleDateString()}</div>
+                <div className="font-medium">到職日期</div>
+                <div className="col-span-2">{new Date(userData.hire_date).toLocaleDateString('zh-TW')}</div>
               </div>
                
               <div className="grid grid-cols-3 gap-2">
-                <div className="font-medium">Role</div>
+                <div className="font-medium">職位</div>
                 <div className="col-span-2">
                   <Badge variant={userData.is_manager ? "default" : "secondary"}>
-                    {userData.is_manager ? "Manager" : "Employee"}
+                    {userData.is_manager ? "主管" : "員工"}
                   </Badge>
                 </div>
               </div>
@@ -259,7 +259,7 @@ export default function ProfilePage() {
                 {isEditing ? (
                   <>
                     <Button onClick={handleSaveProfile} disabled={loading} className="flex-1">
-                      Save Changes
+                      儲存變更
                     </Button>
                     <Button 
                       variant="outline" 
@@ -275,12 +275,12 @@ export default function ProfilePage() {
                       }} 
                       className="flex-1"
                     >
-                      Cancel
+                      取消
                     </Button>
                   </>
                 ) : (
                   <Button onClick={() => setIsEditing(true)} className="flex-1">
-                    Edit Profile
+                    編輯個人資料
                   </Button>
                 )}
               </div>
@@ -293,8 +293,8 @@ export default function ProfilePage() {
         <div className="flex items-center justify-center">
           <Card className="w-[25rem] lg:w-[30rem] max-w-full mx-4">
             <CardHeader>
-              <CardTitle>Leave Balance</CardTitle>
-              <CardDescription>Your current leave quotas and usage</CardDescription>
+              <CardTitle>請假額度</CardTitle>
+              <CardDescription>您目前的請假額度和使用情況</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

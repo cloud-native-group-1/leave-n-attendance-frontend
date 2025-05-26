@@ -32,7 +32,6 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>團隊出勤</CardTitle>
-            <CardDescription>今日請假的團隊成員</CardDescription>
           </CardHeader>
           <CardContent>
             <TeamAvailability />

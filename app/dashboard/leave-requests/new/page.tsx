@@ -26,25 +26,6 @@ import { createLeaveRequest, uploadLeaveAttachment } from "@/lib/services/leave-
 import { getMyLeaveBalance, type LeaveBalanceItem } from "@/lib/services/leave-balance"
 import { getCurrentUser, type UserProfile } from "@/lib/services/user"
 
-const formSchema = z.object({
-  leaveType: z.string({
-    required_error: "請選擇假別",
-  }),
-  dateRange: z.object({
-    from: z.date({
-      required_error: "請選擇開始日期",
-    }),
-    to: z.date({
-      required_error: "請選擇結束日期",
-    }),
-  }),
-  reason: z.string().optional(),
-  proxyPerson: z.string({
-    required_error: "請選擇代理人",
-  }),
-  attachment: z.any().optional(),
-})
-
 export default function NewLeaveRequestPage() {
   const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
@@ -54,6 +35,45 @@ export default function NewLeaveRequestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploadingFiles, setIsUploadingFiles] = useState(false)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
+
+  // 取得公假的 id
+  const publicLeaveType = leaveTypes.find(type => type.name === "公假")
+  const publicLeaveTypeId = publicLeaveType?.id?.toString()
+
+  // files 狀態與 form 的 attachment 欄位同步
+  useEffect(() => {
+    form.setValue("attachment", files, { shouldValidate: true })
+  }, [files])
+
+  const formSchema = z.object({
+    leaveType: z.string({
+      required_error: "請選擇假別",
+    }),
+    dateRange: z.object({
+      from: z.date({
+        required_error: "請選擇開始日期",
+      }),
+      to: z.date({
+        required_error: "請選擇結束日期",
+      }),
+    }),
+    reason: z.string().optional(),
+    proxyPerson: z.string({
+      required_error: "請選擇代理人",
+    }),
+    attachment: z.array(z.instanceof(File)).optional(),
+  }).superRefine((data, ctx) => {
+    if (
+      data.leaveType === publicLeaveTypeId &&
+      (!Array.isArray(data.attachment) || data.attachment.length === 0)
+    ) {
+      ctx.addIssue({
+        path: ["attachment"],
+        code: z.ZodIssueCode.custom,
+        message: "申請公假時，附件為必填",
+      })
+    }
+  })
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -100,6 +120,16 @@ export default function NewLeaveRequestPage() {
   }, [])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // 公假時附件必填的保險檢查
+    if (
+      values.leaveType === publicLeaveTypeId &&
+      (!files || files.length === 0)
+    ) {
+      form.setError("attachment", { type: "manual", message: "申請公假時，附件為必填" })
+      setIsSubmitting(false)
+      return
+    }
+
     try {
       setIsSubmitting(true)
       const data = {
@@ -116,7 +146,7 @@ export default function NewLeaveRequestPage() {
       if (files.length > 0) {
         try {
           setIsUploadingFiles(true)
-          const uploadPromises = files.map(file => 
+          const uploadPromises = files.map((file: File) => 
             uploadLeaveAttachment(leaveRequest.id, file)
           )
           await Promise.all(uploadPromises)
@@ -185,7 +215,11 @@ export default function NewLeaveRequestPage() {
       }
       
       if (validFiles.length > 0) {
-        setFiles((prev) => [...prev, ...validFiles])
+        setFiles((prev) => {
+          const updated = [...prev, ...validFiles]
+          form.setValue("attachment", updated, { shouldValidate: true })
+          return updated
+        })
       }
       
       // Reset input value to allow selecting the same file again
@@ -194,7 +228,11 @@ export default function NewLeaveRequestPage() {
   }
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index))
+    setFiles((prev) => {
+      const updated = prev.filter((_, i) => i !== index)
+      form.setValue("attachment", updated, { shouldValidate: true })
+      return updated
+    })
   }
 
   // Helper function to format file size
@@ -360,7 +398,7 @@ export default function NewLeaveRequestPage() {
                           .filter(person => person.id !== currentUser.id)
                           .map((person) => (
                             <SelectItem key={person.id} value={person.id.toString()}>
-                              {person.first_name} {person.last_name}
+                              {person.last_name}{person.first_name}
                             </SelectItem>
                           ))}
                       </SelectContent>
@@ -433,7 +471,7 @@ export default function NewLeaveRequestPage() {
                       </div>
                     </FormControl>
                     <FormDescription>
-                      上傳相關文件（國定假日申請必須附上證明文件）。
+                      上傳相關文件（公假申請必須附上證明文件）。
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

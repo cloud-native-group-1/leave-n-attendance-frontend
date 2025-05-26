@@ -269,7 +269,7 @@ export default function LeaveRequestDetailPage({ params }: LeaveRequestDetailPag
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">請假天數</Label>
+                  <Label className="text-sm font-medium text-muted-foreground mr-2">請假天數</Label>
                   <span className="font-medium">{leaveRequest.days_count} 天</span>
                 </div>
 
