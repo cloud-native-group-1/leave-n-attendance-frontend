@@ -25,7 +25,7 @@ export function NotificationsPopover() {
         setLoading(true)
         const response = await getNotifications({ 
           page: 1, 
-          per_page: 5,  // Only show latest 5 in navbar
+          per_page: 100,  // Only show latest 5 in navbar
           unread_only: false 
         })
         setNotifications(response.notifications)
