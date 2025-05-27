@@ -53,7 +53,7 @@ export default function NotificationsPage() {
   const [pagination, setPagination] = useState({
     total: 0,
     page: 1,
-    per_page: 100,
+    per_page: 10,
     total_pages: 0
   })
   
