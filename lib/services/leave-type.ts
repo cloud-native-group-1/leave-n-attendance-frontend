@@ -11,7 +11,7 @@ export interface LeaveType {
  */
 export async function getLeaveTypes(): Promise<LeaveType[]> {
   try {
-    const response = await api.get<LeaveType[]>("/leave-types/")
+    const response = await api.get<LeaveType[]>("/leave-types")
     return response.data
   } catch (error) {
     console.error("Failed to fetch leave types:", error)
