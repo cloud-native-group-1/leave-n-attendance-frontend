@@ -42,7 +42,7 @@ export function RecentLeaveRequests() {
     const fetchRecentRequests = async () => {
       try {
         setLoading(true)
-        const responseData = await getRecentLeaveRequests(5)
+        const responseData = await getRecentLeaveRequests(100)
         setData(responseData)
       } catch (err) {
         console.error('Failed to fetch recent leave requests:', err)

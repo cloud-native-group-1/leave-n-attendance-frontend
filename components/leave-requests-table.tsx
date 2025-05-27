@@ -70,7 +70,7 @@ export function LeaveRequestsTable({ type }: LeaveRequestsTableProps) {
   const [pagination, setPagination] = useState<PaginationMeta>({
     total: 0,
     page: 1,
-    per_page: 10,
+    per_page: 100,
     total_pages: 0
   })
   
